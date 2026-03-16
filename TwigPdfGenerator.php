@@ -262,19 +262,52 @@ HTML;
                     }
                 }
 
-                // 3. Fallback for ranking questions: try suffix matching
-                if ($question->type == "R" && empty($val)) {
+                // 3. Fallback for ranking questions: map items to ranks
+                if ($question->type == "R") {
+                    // In ranking questions, the response data (both raw and mapped) 
+                    // usually has keys like Q18_1, Q18_2... where the value is the item code.
+                    // We need to find which rank (suffix) has this subquestion's code as its value.
+                    
+                    // Check mapped values first
                     foreach ($responseValueData as $rvKey => $rvVal) {
-                        if (strpos($rvKey, $question->title . '_') === 0) {
-                            $parts = explode('_', $rvKey);
-                            if (end($parts) == $subQuestion->title) {
-                                $val = $rvVal;
-                                break;
+                        // Check if key starts with question title (e.g. Q18_1)
+                        if (strpos($rvKey, $question->title) === 0) {
+                            $cleanRvVal = trim(strip_tags(html_entity_decode($rvVal)));
+                            $cleanSubQText = trim(strip_tags(html_entity_decode($subQuestion->questionl10ns[$lang]->question)));
+                            
+                            // Check if value matches subquestion title (code) or text
+                            if ($rvVal == $subQuestion->title || $cleanRvVal == $cleanSubQText) {
+                                // Extract rank from key (e.g. 1 from Q18_1)
+                                if (preg_match('/_(\d+)$/', $rvKey, $matches)) {
+                                    $rank = $matches[1];
+                                    $row['answers'][(int)$rank] = $subQuestion->questionl10ns[$lang]->question;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Check raw values as well
+                    foreach ($responseData as $rKey => $rVal) {
+                        // Match Q18_1 or SIDXGIDXQID1
+                        // Ensure we are looking at the right question by checking QID inclusion or Title prefix
+                        if (strpos($rKey, $question->title . '_') === 0 || strpos($rKey, (string)$question->qid) !== false) {
+                            if ($rVal == $subQuestion->title || $rVal == $subQuestion->qid . $subQuestion->title) {
+                                $rank = null;
+                                if (preg_match('/_(\d+)$/', $rKey, $matches)) {
+                                    $rank = $matches[1];
+                                } elseif (preg_match('/X' . $question->qid . '(\d+)$/', $rKey, $matches)) {
+                                    // Match SIDXGIDXQID1 format where 1 is rank
+                                    $rank = $matches[1];
+                                }
+                                
+                                if ($rank !== null && is_numeric($rank)) {
+                                    $row['answers'][(int)$rank] = $subQuestion->questionl10ns[$lang]->question;
+                                }
                             }
                         }
                     }
                 }
-                
+
                 // 4. Ultimate fallback: try searching responseData for any key containing SID, GID, QID and SQ title
                 if (empty($val)) {
                     foreach ($responseData as $rKey => $rVal) {
@@ -296,19 +329,16 @@ HTML;
                 // Add subquestion data to global context
                 $context['questions'][$question->title . "_" . $subQuestion->title] = $srow;
 
-                // Populate the parent question's answers array
-                if ($checked || $question->type == "R") {
-                    if (in_array($question->type, ["M", "P"])) {
-                        // Multiple Choice: store label
-                        $row['answers'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
-                    } elseif ($question->type == "R") {
-                        // Ranking: store label at the index of its rank
-                        if (is_numeric($val) && $val > 0) {
-                            $row['answers'][(int)$val] = $subQuestion->questionl10ns[$lang]->question;
+                // Populate the parent question's answers array for other types
+                if ($question->type != "R") {
+                    if ($checked) {
+                        if (in_array($question->type, ["M", "P"])) {
+                            // Multiple Choice: store label
+                            $row['answers'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+                        } elseif (in_array($question->type, ["K", "Q", "A", "B", "C", "E", "F", "H", ":", ";"])) {
+                            // Multiple Input or Arrays: store value
+                            $row['answers'][$subQuestion->title] = $val;
                         }
-                    } elseif (in_array($question->type, ["K", "Q", "A", "B", "C", "E", "F", "H", ":", ";"])) {
-                        // Multiple Input or Arrays: store value
-                        $row['answers'][$subQuestion->title] = $val;
                     }
                 }
 
