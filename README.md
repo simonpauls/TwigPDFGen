@@ -6,7 +6,17 @@ This plugin for LimeSurvey allows you to generate professional, customized PDF r
 
 *   **Dynamic PDF Generation**: Create PDF reports from survey responses on the fly.
 *   **Twig Templating**: Utilize the flexible and powerful Twig templating engine to design your PDFs with custom HTML and CSS.
-*   **Ranking (R) Question Support**: Comprehensive support for ranking questions, including automatic sorting of ranked items.
+*   **Comprehensive Question Type Support**: Extensive support for all major LimeSurvey question types, including:
+    *   **Arrays (Matrix)**: (Types A, B, C, E, F, H, :, ;) - Renders as a structured table of subquestions and their selected labels.
+    *   **Ranking (R)**: Automatically sorted lists based on the participant's order.
+    *   **Multiple Choice (M, P)**: Including "Other" and comments, rendered as square-bulleted lists.
+    *   **List with Comment (Z)**: Renders the selected option and the associated comment.
+    *   **Multiple Numerical/Short Text (K, Q)**: Renders subquestions with their respective inputs.
+    *   **File Upload (|)**: Displays filenames and sizes of all uploaded documents.
+    *   **Heat Map (?) & Equation (*)**: Renders the resulting value or coordinates.
+    *   **Single Choice (G, L, O, Y, !)**: Radio, Dropdown, Gender, Yes/No - Renders the selected answer label.
+    *   **Text/Numerical (N, S, T, U)**: Short/Long/Huge free text and numbers.
+    *   **Special (D, X)**: Date/Time and Text Display (instructions).
 *   **Visualizations**: Includes support for simple charts and visual elements (e.g., progress bars) to represent survey data.
 *   **mPDF Integration**: Leverages the `mPDF` library to ensure high-quality, print-optimized PDF generation with support for custom fonts and advanced styling.
 *   **Email Automation**: Automatically send the generated PDF as an email attachment to a specified address or the participant's email.

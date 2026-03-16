@@ -2,224 +2,96 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ihr Ergebnisbericht – Persönlichkeits- und Kompetenztest 55+</title>
+    <title>Survey Response Summary</title>
+    <style>
+        body { font-family: sans-serif; font-size: 11pt; line-height: 1.5; color: #333; max-width: 800px; margin: 40px auto; padding: 20px; background-color: #f4f7f9; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 30px; }
+        .header h1 { margin: 0; color: #2c3e50; }
+        .question { margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .question:last-child { border-bottom: none; }
+        .question-title { font-weight: bold; font-size: 12pt; margin-bottom: 10px; color: #2980b9; }
+        .answer { background: #f9f9f9; padding: 15px; border-radius: 4px; border-left: 4px solid #bdc3c7; }
+        .tag { display: inline-block; background: #e1f5fe; color: #0277bd; padding: 4px 10px; border-radius: 20px; margin: 2px; font-size: 10pt; }
+        .array-table { width: 100%; border-collapse: collapse; }
+        .array-table td { padding: 8px; border-bottom: 1px solid #eee; }
+        .array-table td:first-child { font-weight: bold; width: 40%; color: #7f8c8d; }
+    </style>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f6f8; font-family: Arial, Helvetica, sans-serif;">
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>Ihr Ergebnisbericht</h1>
+            <p>Vielen Dank für Ihre Teilnahme an der Umfrage.</p>
+        </div>
 
-<!-- Outer wrapper -->
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8;">
-  <tr>
-    <td align="center" style="padding: 30px 15px;">
+        {% for question in questions %}
+            {% if question.type != 'X' %}
+                <div class="question">
+                    <div class="question-title">{{ question.text|striptags }}</div>
+                    <div class="answer">
+                        
+                        {# Array Questions #}
+                        {% if question.type in ['A', 'B', 'C', 'E', 'F', 'H', ':', ';'] %}
+                            <table class="array-table">
+                                {% for subcode, subtext in question.answers %}
+                                    <tr>
+                                        <td>{{ questions[question.code ~ '_' ~ subcode].text|striptags }}</td>
+                                        <td>{{ subtext|striptags }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
 
-      <!-- Email container -->
-      <table width="620" cellpadding="0" cellspacing="0" border="0" style="max-width:620px; width:100%; background-color:#ffffff; border-radius:6px; overflow:hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        {# Multiple Choice #}
+                        {% elseif question.type in ['M', 'P'] %}
+                            {% for code, text in question.answers %}
+                                <div style="margin-bottom: 5px;">
+                                    <span class="tag">{{ text|striptags }}</span>
+                                    {% set subQ = questions[question.code ~ '_' ~ code] %}
+                                    {% if subQ.comment is not empty %}
+                                        <div style="font-style: italic; color: #7f8c8d; font-size: 9pt; margin-left: 10px;">
+                                            Kommentar: {{ subQ.comment|striptags }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
 
-        <!-- ── HEADER ── -->
-        <tr>
-          <td style="background-color:#2c3e50; padding: 28px 36px 24px 36px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td>
-                  <!-- Logo text fallback if image not available -->
-                  <table cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="font-size:22px; font-weight:900; color:#ffffff; letter-spacing:1px; line-height:1;">
-                        SEN<span style="color:#e67e22;">&#9651;</span>OR
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="font-size:22px; font-weight:900; color:#ffffff; letter-spacing:1px; line-height:1;">
-                        TALENT
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-                <td align="right" valign="middle">
-                  <span style="display:inline-block; background-color:#2980b9; color:#ffffff; font-size:11px; font-weight:bold; padding:5px 12px; border-radius:20px; letter-spacing:0.5px; text-transform:uppercase;">
-                    Ihr persönlicher Bericht
-                  </span>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
+                        {# Ranking #}
+                        {% elseif question.type == 'R' %}
+                            <ol style="margin: 0; padding-left: 20px;">
+                                {% for rank, text in question.answers %}
+                                    <li>{{ text|striptags }}</li>
+                                {% endfor %}
+                            </ol>
 
-        <!-- ── BLUE ACCENT BAR ── -->
-        <tr>
-          <td style="background-color:#2980b9; height:4px; font-size:0; line-height:0;">&nbsp;</td>
-        </tr>
+                        {# File Upload #}
+                        {% elseif question.type == '|' %}
+                            <ul style="margin: 0; padding-left: 20px;">
+                                {% for file in question.answers %}
+                                    <li>{{ file.name }}</li>
+                                {% endfor %}
+                            </ul>
 
-        <!-- ── HERO SECTION ── -->
-        <tr>
-          <td style="background-color:#2c3e50; padding: 0 36px 32px 36px;">
-            <h1 style="margin:0; font-size:22px; font-weight:700; color:#ffffff; line-height:1.3;">
-              Ergebnisbericht<br>
-              <span style="color:#5dade2;">Persönlichkeits- und Kompetenztest 55+</span>
-            </h1>
-            <p style="margin:12px 0 0 0; font-size:13px; color:#aab7c4; line-height:1.6;">
-              Vielen Dank für Ihre Teilnahme. Im Anhang dieser E-Mail finden Sie Ihren persönlichen Ergebnisbericht als PDF-Datei.
-            </p>
-          </td>
-        </tr>
+                        {# Default / Text / Numerical #}
+                        {% else %}
+                            {{ question.value|striptags|default('-') }}
+                        {% endif %}
 
-        <!-- ── MAIN CONTENT ── -->
-        <tr>
-          <td style="padding: 32px 36px;">
+                        {# Display comment if available #}
+                        {% if question.comment is not empty %}
+                            <div style="margin-top: 10px; font-style: italic; color: #7f8c8d; border-top: 1px dashed #eee; padding-top: 10px;">
+                                <strong>Kommentar:</strong> {{ question.comment|striptags }}
+                            </div>
+                        {% endif %}
 
-            <!-- Greeting -->
-            <p style="margin:0 0 20px 0; font-size:14px; color:#2c3e50; line-height:1.6;">
-              Sehr geehrte Teilnehmerin, sehr geehrter Teilnehmer,
-            </p>
-            <p style="margin:0 0 24px 0; font-size:13px; color:#555555; line-height:1.7;">
-              Sie haben den <strong style="color:#2c3e50;">Persönlichkeits- und Kompetenztest 55+</strong> erfolgreich abgeschlossen. Ihr individueller Bericht wurde erstellt und steht Ihnen im Anhang dieser E-Mail als PDF zur Verfügung.
-            </p>
-
-            <!-- Info box -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-              <tr>
-                <td style="background-color:#eaf4fb; border-left:4px solid #2980b9; border-radius:0 4px 4px 0; padding:16px 18px;">
-                  <p style="margin:0 0 4px 0; font-size:12px; font-weight:bold; color:#2980b9; text-transform:uppercase; letter-spacing:0.5px;">Ihr Bericht enthält</p>
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
-                    <tr>
-                      <td width="50%" valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Soft Skills &amp; Selbstmanagement
-                      </td>
-                      <td width="50%" valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Kommunikationsstil
-                      </td>
-                    </tr>
-                    <tr>
-                      <td valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Problemlösung &amp; Entscheidungsstil
-                      </td>
-                      <td valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Zusammenarbeit &amp; Rollenverständnis
-                      </td>
-                    </tr>
-                    <tr>
-                      <td valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Digitale &amp; methodische Kompetenzen
-                      </td>
-                      <td valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Berufserfahrung &amp; Wissensgebiete
-                      </td>
-                    </tr>
-                    <tr>
-                      <td valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Lerninteressen &amp; Zukunftsrollen
-                      </td>
-                      <td valign="top" style="font-size:12px; color:#444444; padding:3px 0;">
-                        ✔ &nbsp;Persönliche Eigenschaften &amp; Reflexion
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Divider -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-              <tr>
-                <td style="border-top:1px solid #e8ecef; font-size:0; line-height:0;">&nbsp;</td>
-              </tr>
-            </table>
-
-            <!-- Next steps -->
-            <p style="margin:0 0 12px 0; font-size:13px; font-weight:bold; color:#2c3e50;">Was Sie jetzt tun können:</p>
-
-            <!-- Step 1 -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;">
-              <tr>
-                <td width="36" valign="top">
-                  <div style="width:26px; height:26px; background-color:#2980b9; border-radius:50%; text-align:center; line-height:26px; font-size:12px; font-weight:bold; color:#ffffff;">1</div>
-                </td>
-                <td valign="top" style="font-size:12px; color:#555555; line-height:1.6; padding-top:4px;">
-                  <strong style="color:#2c3e50;">PDF öffnen &amp; lesen</strong><br>
-                  Nehmen Sie sich Zeit, Ihre Antworten und Stärken in Ruhe zu reflektieren.
-                </td>
-              </tr>
-            </table>
-
-            <!-- Step 2 -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;">
-              <tr>
-                <td width="36" valign="top">
-                  <div style="width:26px; height:26px; background-color:#2980b9; border-radius:50%; text-align:center; line-height:26px; font-size:12px; font-weight:bold; color:#ffffff;">2</div>
-                </td>
-                <td valign="top" style="font-size:12px; color:#555555; line-height:1.6; padding-top:4px;">
-                  <strong style="color:#2c3e50;">Ergebnisse nutzen</strong><br>
-                  Verwenden Sie Ihren Bericht als Grundlage für Gespräche über Ihre Zukunftsrolle und Weiterbildungswünsche.
-                </td>
-              </tr>
-            </table>
-
-            <!-- Step 3 -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
-              <tr>
-                <td width="36" valign="top">
-                  <div style="width:26px; height:26px; background-color:#2980b9; border-radius:50%; text-align:center; line-height:26px; font-size:12px; font-weight:bold; color:#ffffff;">3</div>
-                </td>
-                <td valign="top" style="font-size:12px; color:#555555; line-height:1.6; padding-top:4px;">
-                  <strong style="color:#2c3e50;">Bei Fragen melden</strong><br>
-                  Für Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.
-                </td>
-              </tr>
-            </table>
-
-            <!-- Divider -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-              <tr>
-                <td style="border-top:1px solid #e8ecef; font-size:0; line-height:0;">&nbsp;</td>
-              </tr>
-            </table>
-
-            <!-- Closing -->
-            <p style="margin:0 0 6px 0; font-size:13px; color:#555555; line-height:1.6;">
-              Mit freundlichen Grüßen,
-            </p>
-            <p style="margin:0; font-size:13px; font-weight:bold; color:#2c3e50;">
-              Das Senior Talent Team
-            </p>
-
-          </td>
-        </tr>
-
-        <!-- ── ORANGE ACCENT BAR ── -->
-        <tr>
-          <td style="background-color:#e67e22; height:3px; font-size:0; line-height:0;">&nbsp;</td>
-        </tr>
-
-        <!-- ── FOOTER ── -->
-        <tr>
-          <td style="background-color:#2c3e50; padding:20px 36px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td style="font-size:11px; color:#7f8c9a; line-height:1.6;">
-                  Diese E-Mail wurde automatisch aus Ihren LimeSurvey-Eingaben generiert.<br>
-                  Bitte antworten Sie nicht auf diese E-Mail.
-                </td>
-                <td align="right" valign="middle">
-                  <span style="font-size:10px; color:#5d6d7a; font-weight:bold; letter-spacing:1px;">
-                    SEN<span style="color:#e67e22;">&#9651;</span>OR TALENT
-                  </span>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-      </table>
-      <!-- /Email container -->
-
-      <!-- Below-email note -->
-      <p style="margin:16px 0 0 0; font-size:10px; color:#999999; text-align:center;">
-        Sie erhalten diese E-Mail, weil Sie an unserem Kompetenztest teilgenommen haben.
-      </p>
-
-    </td>
-  </tr>
-</table>
-
+                    </div>
+                </div>
+            {% else %}
+                <div style="margin-bottom: 30px; font-style: italic; color: #7f8c8d;">
+                    {{ question.text|striptags }}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
 </body>
 </html>

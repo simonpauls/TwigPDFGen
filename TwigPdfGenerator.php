@@ -202,23 +202,41 @@ HTML;
                 'text' => $question->questionl10ns[$lang]->question,
                 'helpText' => $question->questionl10ns[$lang]->help,
             ];
-            $assessmentAttribute = \QuestionAttribute::model()->findByAttributes([
-                'qid' => $question->qid,
-                'attribute' => 'assessment_value'
-                ]);
-            $row['value'] = isset($assessmentAttribute) ? (int) $assessmentAttribute->value : 1;
+            $row['value'] = isset($responseValueData[$question->title]) ? $responseValueData[$question->title] : (isset($responseData[$question->title]) ? $responseData[$question->title] : null);
             
-            // Initialize answers array for multiple-choice or multiple-input types
-            if (in_array($question->type, ["M", "P", "K", "Q", "R"])) {
+            // Question type code
+            $row['type'] = $question->type;
+
+            // Check for potential comment field (e.g., List with Comment 'Z' or Multiple Choice with comments)
+            $commentKey = "{$question->title}comment";
+            $row['comment'] = isset($responseData[$commentKey]) ? $responseData[$commentKey] : null;
+
+            // Initialize answers array for complex types
+            // Complex types include: Multiple Choice, Arrays, Ranking, File Upload, List with Comment
+            if (in_array($question->type, ["M", "P", "K", "Q", "R", "A", "B", "C", "E", "F", "H", ":", ";", "Z", "|"])) {
                 $row['answers'] = [];
             }
 
-            if ($question->type == "M") {
+            // Specific handling for File Upload (|)
+            if ($question->type == "|") {
+                $fileContent = isset($responseData[$question->title]) ? $responseData[$question->title] : null;
+                if (!empty($fileContent)) {
+                    $fileData = json_decode($fileContent, true);
+                    if (is_array($fileData)) {
+                        $row['answers'] = $fileData;
+                    }
+                }
+            }
+
+            // Initialize Multiple Choice flags
+            if (in_array($question->type, ["M", "P"])) {
                 $row['falseNegatives'] = [];
                 $row['trueNegatives'] = [];
                 $row['falsePositives'] = [];
                 $row['truePositives'] = [];
             }
+
+            // Iterate over subquestions
             foreach($question->subquestions as $subQuestion) {
                 $srow = [
                     'group_id' => $question->gid,
@@ -227,65 +245,75 @@ HTML;
                     'helpText' => $subQuestion->questionl10ns[$lang]->help,
                 ];
                      
+                // Construct potential keys for data lookup
                 $responseKey = "{$question->title}_{$subQuestion->title}";
-                 // Try to find the value in responseValueData (mapped question codes)
-                 $val = isset($responseValueData[$responseKey]) ? $responseValueData[$responseKey] : null;
-                 
-                 // Fallback: Try to find in raw responseData using the SID_GID_QID format
-                 if (empty($val)) {
-                     // The subquestion object might have the raw column name in some versions
-                     // But we can construct it if we know sid, gid, qid
-                     $rawKey = "{$surveyId}X{$question->gid}X{$question->qid}{$subQuestion->title}";
-                     if (isset($responseData[$rawKey])) {
-                         $val = $responseData[$rawKey];
-                     }
+                $rawKey = "{$surveyId}X{$question->gid}X{$question->qid}{$subQuestion->title}";
+                $rawKey2 = "{$surveyId}X{$question->gid}X{$question->qid}_{$subQuestion->title}";
 
-                     // Try with underscore or different subquestion code format if needed
-                     $rawKey2 = "{$surveyId}X{$question->gid}X{$question->qid}_{$subQuestion->title}";
-                     if (isset($responseData[$rawKey2])) {
-                         $val = $responseData[$rawKey2];
-                     }
-                 }
-
-                 // Fallback for ranking questions if value is empty: try matching by subquestion title suffix
-                 if ($question->type == "R" && empty($val)) {
-                     foreach ($responseValueData as $rvKey => $rvVal) {
-                         if (strpos($rvKey, $question->title . '_') === 0) {
-                             $parts = explode('_', $rvKey);
-                             $lastPart = end($parts);
-                             if ($lastPart == $subQuestion->title || (int)$lastPart == (int)$subQuestion->title) {
-                                 $val = $rvVal;
-                                 break;
-                             }
-                         }
-                     }
-                 }
-
-                 $checked = !empty($val);
+                // 1. Try mapped code from responseValueData
+                $val = isset($responseValueData[$responseKey]) ? $responseValueData[$responseKey] : null;
                 
+                // 2. Try raw SIDXGIDXQID format from responseData
+                if (empty($val)) {
+                    if (isset($responseData[$rawKey])) {
+                        $val = $responseData[$rawKey];
+                    } elseif (isset($responseData[$rawKey2])) {
+                        $val = $responseData[$rawKey2];
+                    }
+                }
+
+                // 3. Fallback for ranking questions: try suffix matching
+                if ($question->type == "R" && empty($val)) {
+                    foreach ($responseValueData as $rvKey => $rvVal) {
+                        if (strpos($rvKey, $question->title . '_') === 0) {
+                            $parts = explode('_', $rvKey);
+                            if (end($parts) == $subQuestion->title) {
+                                $val = $rvVal;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // 4. Ultimate fallback: try searching responseData for any key containing SID, GID, QID and SQ title
+                if (empty($val)) {
+                    foreach ($responseData as $rKey => $rVal) {
+                        if (strpos($rKey, (string)$question->qid) !== false && strpos($rKey, $subQuestion->title) !== false) {
+                            $val = $rVal;
+                            break;
+                        }
+                    }
+                }
+
+                $checked = !empty($val);
                 $srow['value'] = $val;
                 $srow['checked'] = $checked;
 
+                // Check for subquestion comment (common in Multiple Choice with comments)
+                $sqCommentKey = "{$question->title}_{$subQuestion->title}comment";
+                $srow['comment'] = isset($responseData[$sqCommentKey]) ? $responseData[$sqCommentKey] : null;
+
+                // Add subquestion data to global context
                 $context['questions'][$question->title . "_" . $subQuestion->title] = $srow;
 
-                if ($checked) {
+                // Populate the parent question's answers array
+                if ($checked || $question->type == "R") {
                     if (in_array($question->type, ["M", "P"])) {
-                        // For multiple choice, store the label
+                        // Multiple Choice: store label
                         $row['answers'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
-                    } elseif (in_array($question->type, ["K", "Q"])) {
-                        // For multiple numerical/text, store the value
+                    } elseif ($question->type == "R") {
+                        // Ranking: store label at the index of its rank
+                        if (is_numeric($val) && $val > 0) {
+                            $row['answers'][(int)$val] = $subQuestion->questionl10ns[$lang]->question;
+                        }
+                    } elseif (in_array($question->type, ["K", "Q", "A", "B", "C", "E", "F", "H", ":", ";"])) {
+                        // Multiple Input or Arrays: store value
                         $row['answers'][$subQuestion->title] = $val;
                     }
                 }
 
-                // Handle ranking questions
-                if ($question->type == "R") {
-                    if (!empty($val) && is_numeric($val) && $val > 0) {
-                        $row['answers'][(int)$val] = $subQuestion->questionl10ns[$lang]->question;
-                    }
-                }
-
-                if ($question->type == "M") {
+                // Specific logic for Multiple Choice analysis
+                if (in_array($question->type, ["M", "P"])) {
                     if (strncmp($subQuestion->title, 'C', 1) === 0) {
                         if ($checked) {
                             $row['truePositives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
@@ -303,7 +331,7 @@ HTML;
                 }
             }
 
-            // Handle 'other' for multiple choice
+            // Handle 'other' for multiple choice questions
             if (in_array($question->type, ["M", "P"])) {
                 $otherKey = "{$question->title}_other";
                 if (!empty($responseData[$otherKey])) {
@@ -311,8 +339,8 @@ HTML;
                 }
             }
 
-            if ($question->type == "R") {
-                // Sort the answers by rank
+            // Sort ranking questions by their rank
+            if ($question->type == "R" && !empty($row['answers'])) {
                 ksort($row['answers']);
             }
             
