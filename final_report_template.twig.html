@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { margin: 15mm; footer: html_myFooter; }
+        body { font-family: 'Helvetica', sans-serif; color: #333; font-size: 8.5pt; line-height: 1.1; }
+        
+        /* Header */
+        .header-table { width: 100%; border-bottom: 2pt solid #2c3e50; margin-bottom: 12px; }
+        .title { font-size: 15pt; font-weight: bold; color: #2c3e50; }
+        .user-info { text-align: right; color: #7f8c8d; font-size: 7.5pt; }
+        
+        /* Modules */
+        .module-wrapper { page-break-inside: avoid; margin-bottom: 10px; }
+        .module-title { background: #f4f7f9; border-left: 3.5pt solid #3498db; padding: 4px 8px; font-weight: bold; font-size: 9.5pt; color: #2980b9; margin-bottom: 6px; }
+        
+        /* Layout Tables */
+        .grid-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .grid-td { padding: 3px; vertical-align: top; }
+        
+        /* Question & Viz */
+        .q-text { font-size: 7.5pt; color: #34495e; margin-bottom: 1px; font-weight: bold; }
+        .viz-label { font-size: 6.5pt; font-weight: bold; color: #2c3e50; text-align: right; }
+        
+        /* Robust Segmented Bar Chart */
+        .bar-container-table { 
+            border-collapse: separate; 
+            border-spacing: 1.5pt 0pt; 
+            width: 100%; 
+            margin-top: 1px; 
+            margin-left: -1.5pt; 
+        }
+        .segment { height: 7px; border-radius: 1.5px; font-size: 1px; line-height: 1px; }
+        
+        /* Tags & Boxes */
+        .tag { background-color: #ebf5fb; color: #2980b9; padding: 2px 6px; border-radius: 3px; font-size: 7pt; margin-bottom: 3px; border: 0.4pt solid #d6eaf8; display: block; width: fit-content; }
+        .text-box { background-color: #f9f9f9; padding: 5px; font-size: 7.5pt; border-left: 1.5pt solid #bdc3c7; margin-top: 3px; min-height: 15px; font-weight: normal; }
+        
+        /* Ranking */
+        .ranking-ol { margin-top: 3px; padding-left: 15px; }
+        .ranking-li { font-size: 7.5pt; color: #34495e; margin-bottom: 2px; }
+        
+        .footer { text-align: center; font-size: 7pt; color: #bdc3c7; }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td class="title">ERGEBNISBERICHT 55+</td>
+            <td class="user-info">
+                <strong>{{ responsevalue.firstname|striptags }} {{ responsevalue.lastname|striptags }}</strong><br>
+                Datum: {{ "now"|date("d.m.Y") }}
+            </td>
+        </tr>
+    </table>
+
+    {# --- MATHEMATISCHES DIAGRAMM-MAKRO --- #}
+    {% macro draw_bar(val, text) %}
+        {% set colors = { 0: '#eeeeee', 1: '#e74c3c', 2: '#e67e22', 3: '#f1c40f', 4: '#2ecc71', 5: '#27ae60' } %}
+        {% set active_color = colors[val|default(0)] %}
+        {% set score = val|default(0) %}
+        <div style="margin-bottom: 8px;">
+            <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td class="q-text">{{ text|striptags }}</td>
+                    <td class="viz-label" width="25px">{{ score }}/5</td>
+                </tr>
+            </table>
+            <table class="bar-container-table">
+                <tr>
+                    <td width="20%" bgcolor="{{ (score >= 1) ? active_color : '#eeeeee' }}" class="segment">&nbsp;</td>
+                    <td width="20%" bgcolor="{{ (score >= 2) ? active_color : '#eeeeee' }}" class="segment">&nbsp;</td>
+                    <td width="20%" bgcolor="{{ (score >= 3) ? active_color : '#eeeeee' }}" class="segment">&nbsp;</td>
+                    <td width="20%" bgcolor="{{ (score >= 4) ? active_color : '#eeeeee' }}" class="segment">&nbsp;</td>
+                    <td width="20%" bgcolor="{{ (score >= 5) ? active_color : '#eeeeee' }}" class="segment">&nbsp;</td>
+                </tr>
+            </table>
+        </div>
+    {% endmacro %}
+
+    {% macro text_block(label, content) %}
+        <table class="grid-table" style="margin-top: 3px;">
+            <tr>
+                <td class="grid-td">
+                    <div class="q-text">{{ label|striptags }}</div>
+                    <div class="text-box">{{ content|striptags|default('-') }}</div>
+                </td>
+            </tr>
+        </table>
+    {% endmacro %}
+
+    {# --- Modul 1 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 1: Soft Skills & Selbstmanagement</div>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q01, questions.Q01.text) }}
+                    {{ _self.draw_bar(responsevalue.Q02, questions.Q02.text) }}
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q03, questions.Q03.text) }}
+                    {{ _self.draw_bar(responsevalue.Q04, questions.Q04.text) }}
+                </td>
+            </tr>
+        </table>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td">
+                    <div class="q-text">{{ questions.Q05.text|striptags }}</div>
+                    <div style="margin-top:3px;">{% for answer in questions.Q05.answers %}<div class="tag">{{ answer|striptags }}</div>{% endfor %}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 2 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 2: Kommunikationsstil</div>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q06, questions.Q06.text) }}
+                    {{ _self.draw_bar(responsevalue.Q07, questions.Q07.text) }}
+                    {{ _self.draw_bar(responsevalue.Q08, questions.Q08.text) }}
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q09, questions.Q09.text) }}
+                    {{ _self.draw_bar(responsevalue.Q10, questions.Q10.text) }}
+                    <div class="q-text" style="margin-top:3px;">{{ questions.Q11.text|striptags }}</div>
+                    <div style="margin-top:3px;">{% for answer in questions.Q11.answers %}<div class="tag">{{ answer|striptags }}</div>{% endfor %}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 3 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 3: Problemlösung & Entscheidungsstil</div>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q12, questions.Q12.text) }}
+                    {{ _self.draw_bar(responsevalue.Q13, questions.Q13.text) }}
+                    {{ _self.draw_bar(responsevalue.Q14, questions.Q14.text) }}
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q15, questions.Q15.text) }}
+                    {{ _self.draw_bar(responsevalue.Q16, questions.Q16.text) }}
+                    {{ _self.draw_bar(responsevalue.Q17, questions.Q17.text) }}
+                </td>
+            </tr>
+        </table>
+        
+        {# Ranking Question Q18 #}
+        <table class="grid-table" style="margin-top: 8px;">
+            <tr>
+                <td class="grid-td">
+                    <div class="q-text">{{ questions.Q18.text|striptags }}</div>
+                    <ol class="ranking-ol">
+                        {% for rank, text in questions.Q18.answers %}
+                            <li class="ranking-li">{{ text|striptags }}</li>
+                        {% endfor %}
+                    </ol>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 4 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 4: Zusammenarbeit & Rollenverständnis</div>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q19, questions.Q19.text) }}
+                    {{ _self.draw_bar(responsevalue.Q20, questions.Q20.text) }}
+                    {{ _self.draw_bar(responsevalue.Q21, questions.Q21.text) }}
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q22, questions.Q22.text) }}
+                    {{ _self.draw_bar(responsevalue.Q23, questions.Q23.text) }}
+                    <div class="q-text" style="margin-top:5px;">Erfahrung Anleitung:</div>
+                    <div style="margin-top:3px;">{% for answer in questions.Q24.answers %}<div class="tag">{{ answer|striptags }}</div>{% endfor %}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 5 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 5: Digitale & Methodische Kompetenzen</div>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q25, questions.Q25.text) }}
+                    {{ _self.draw_bar(responsevalue.Q26, questions.Q26.text) }}
+                    {{ _self.draw_bar(responsevalue.Q27, questions.Q27.text) }}
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    {{ _self.draw_bar(responsevalue.Q28, questions.Q28.text) }}
+                    {{ _self.draw_bar(responsevalue.Q29, questions.Q29.text) }}
+                    <div class="q-text" style="margin-top:3px;">Vorgehen neue Tools:</div>
+                    <div style="margin-top:3px;">{% for answer in questions.Q31.answers %}<div class="tag">{{ answer|striptags }}</div>{% endfor %}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 6 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 6: Berufserfahrung & Wissensgebiete (ESCO)</div>
+        {{ _self.text_block('Software / Tools:', responsevalue.Q30) }}
+        <table class="grid-table" style="margin-top: 3px;">
+            <tr>
+                <td class="grid-td" width="48%">
+                    <div class="q-text">Erfahrungsbereiche:</div>
+                    <div class="text-box">{{ responsevalue.Q32|striptags|default('-') }}</div>
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    <div class="q-text">Fachkenntnisse:</div>
+                    <div class="text-box">{{ responsevalue.Q33|striptags|default('-') }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 7 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 7: Lerninteressen & Zukunftsrollen</div>
+        <table class="grid-table">
+            <tr>
+                <td class="grid-td">
+                    <div class="q-text">Interessen Weiterbildung:</div>
+                    <div style="margin-top:3px;">{% for answer in questions.Q34.answers %}<div class="tag">{{ answer|striptags }}</div>{% endfor %}</div>
+                    <div class="q-text" style="margin-top:6px;">Geplante Wissensweitergabe:</div>
+                    <div style="margin-top:3px;">{% for answer in questions.Q35.answers %}<div class="tag">{{ answer|striptags }}</div>{% endfor %}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {# --- Modul 8 --- #}
+    <div class="module-wrapper">
+        <div class="module-title">Modul 8: Persönliche Eigenschaften & Reflexion</div>
+        {{ _self.text_block('Top 3 Eigenschaften:', responsevalue.Q36) }}
+        <table class="grid-table" style="margin-top: 3px;">
+            <tr>
+                <td class="grid-td" width="48%">
+                    <div class="q-text">Key Learnings:</div>
+                    <div class="text-box">{{ responsevalue.Q37|striptags|default('-') }}</div>
+                </td>
+                <td width="4%"></td>
+                <td class="grid-td" width="48%">
+                    <div class="q-text">Positive Entscheidungen:</div>
+                    <div class="text-box">{{ responsevalue.Q38|striptags|default('-') }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <htmlpagefooter name="myFooter">
+        <div class="footer">
+            Ergebnisbericht | Generiert von SirPauls TwigPdfGenerator | Seite {PAGENO} von {nbpg}
+        </div>
+    </htmlpagefooter>
+
+</body>
+</html>

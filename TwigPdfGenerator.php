@@ -228,8 +228,40 @@ HTML;
                 ];
                      
                 $responseKey = "{$question->title}_{$subQuestion->title}";
-                $val = isset($responseData[$responseKey]) ? $responseData[$responseKey] : null;
-                $checked = !empty($val);
+                 // Try to find the value in responseValueData (mapped question codes)
+                 $val = isset($responseValueData[$responseKey]) ? $responseValueData[$responseKey] : null;
+                 
+                 // Fallback: Try to find in raw responseData using the SID_GID_QID format
+                 if (empty($val)) {
+                     // The subquestion object might have the raw column name in some versions
+                     // But we can construct it if we know sid, gid, qid
+                     $rawKey = "{$surveyId}X{$question->gid}X{$question->qid}{$subQuestion->title}";
+                     if (isset($responseData[$rawKey])) {
+                         $val = $responseData[$rawKey];
+                     }
+
+                     // Try with underscore or different subquestion code format if needed
+                     $rawKey2 = "{$surveyId}X{$question->gid}X{$question->qid}_{$subQuestion->title}";
+                     if (isset($responseData[$rawKey2])) {
+                         $val = $responseData[$rawKey2];
+                     }
+                 }
+
+                 // Fallback for ranking questions if value is empty: try matching by subquestion title suffix
+                 if ($question->type == "R" && empty($val)) {
+                     foreach ($responseValueData as $rvKey => $rvVal) {
+                         if (strpos($rvKey, $question->title . '_') === 0) {
+                             $parts = explode('_', $rvKey);
+                             $lastPart = end($parts);
+                             if ($lastPart == $subQuestion->title || (int)$lastPart == (int)$subQuestion->title) {
+                                 $val = $rvVal;
+                                 break;
+                             }
+                         }
+                     }
+                 }
+
+                 $checked = !empty($val);
                 
                 $srow['value'] = $val;
                 $srow['checked'] = $checked;
