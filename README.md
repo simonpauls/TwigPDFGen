@@ -6,6 +6,7 @@ This plugin for LimeSurvey allows you to generate professional, customized PDF r
 
 *   **Dynamic PDF Generation**: Create PDF reports from survey responses on the fly.
 *   **Twig Templating**: Utilize the flexible and powerful Twig templating engine to design your PDFs with custom HTML and CSS.
+*   **Ranking (R) Question Support**: Comprehensive support for ranking questions, including automatic sorting of ranked items.
 *   **Visualizations**: Includes support for simple charts and visual elements (e.g., progress bars) to represent survey data.
 *   **mPDF Integration**: Leverages the `mPDF` library to ensure high-quality, print-optimized PDF generation with support for custom fonts and advanced styling.
 *   **Email Automation**: Automatically send the generated PDF as an email attachment to a specified address or the participant's email.
@@ -26,7 +27,8 @@ This plugin for LimeSurvey allows you to generate professional, customized PDF r
 3.  Customize the PDF metadata (Title, Author, Subject, etc.).
 4.  Define the PDF filename. You can use Twig syntax for dynamic naming (e.g., `report-{{ response.id }}.pdf`).
 5.  Set the email subject line, also with Twig support.
-6.  Insert your custom HTML and Twig code into the "PDF Template" and "Mail Template" fields.
+6.  Configure the **Ranking Question Display Format** (Numbered or Bulleted List) in the survey settings.
+7.  Insert your custom HTML and Twig code into the "PDF Template" and "Mail Template" fields.
 
 ### Twig Context
 
@@ -37,7 +39,11 @@ The following data is available in your Twig templates:
 *   `questions`: An array of all survey questions, each with detailed properties:
     *   `text`: The question text.
     *   `helpText`: The help text.
-    *   `answers`: For multiple-choice questions, this array contains the labels of all selected options.
+    *   `type`: The question type code (e.g., "R" for ranking).
+    *   `answers`: 
+        *   For multiple-choice questions: labels of all selected options.
+        *   For ranking (R) questions: an array of ranked items, automatically sorted by rank.
+*   `rankingDisplayType`: The selected display format for ranking questions ("numbered" or "bullet").
 
 ### Example Twig Code
 

@@ -209,7 +209,7 @@ HTML;
             $row['value'] = isset($assessmentAttribute) ? (int) $assessmentAttribute->value : 1;
             
             // Initialize answers array for multiple-choice or multiple-input types
-            if (in_array($question->type, ["M", "P", "K", "Q"])) {
+            if (in_array($question->type, ["M", "P", "K", "Q", "R"])) {
                 $row['answers'] = [];
             }
 
@@ -246,6 +246,13 @@ HTML;
                     }
                 }
 
+                // Handle ranking questions
+                if ($question->type == "R") {
+                    if (!empty($val) && is_numeric($val) && $val > 0) {
+                        $row['answers'][(int)$val] = $subQuestion->questionl10ns[$lang]->question;
+                    }
+                }
+
                 if ($question->type == "M") {
                     if (strncmp($subQuestion->title, 'C', 1) === 0) {
                         if ($checked) {
@@ -271,6 +278,11 @@ HTML;
                     $row['answers']['other'] = $responseData[$otherKey];
                 }
             }
+
+            if ($question->type == "R") {
+                // Sort the answers by rank
+                ksort($row['answers']);
+            }
             
             $context['questions'][$question->title] = $row;
         }
@@ -280,6 +292,8 @@ HTML;
         if (!empty($responseData['token'])) {
             $context['token'] = $this->api->getToken($surveyId, $responseData['token'])->attributes;
         }
+
+        $context['rankingDisplayType'] = $this->get('rankingDisplayType', 'Survey', $surveyId, 'numbered');
     
         return $context;
     }
@@ -423,6 +437,16 @@ HTML;
                     'help' => 'Send a copy of any outbound emails to this address, split multiple addressed with a ";"',
                     'current' => $this->get('mailCopy', 'Survey', $this->event->get('survey'))
                 ],
+                'rankingDisplayType' => [
+                    'type' => 'select',
+                    'label' => 'Ranking Question Display Format',
+                    'options' => [
+                        'numbered' => 'Numbered List',
+                        'bullet' => 'Bulleted List'
+                    ],
+                    'help' => 'Choose how to display the ranked items in the PDF report.',
+                    'current' => $this->get('rankingDisplayType', 'Survey', $this->event->get('survey'), 'numbered')
+                ]
             ]
         ];
 

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Ergebnisbericht</title>
+    <style>
+        body { font-family: sans-serif; }
+        .question { margin-bottom: 20px; }
+        .question-title { font-weight: bold; }
+        .answers { margin-left: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Ergebnisbericht</h1>
+
+    {% for question in questions %}
+        <div class="question">
+            <div class="question-title">{{ question.text }}</div>
+            <div class="answers">
+                {% if question.type in ['M', 'P'] %} {# Multiple Choice #}
+                    <ul>
+                    {% for code, text in question.answers %}
+                        <li>{{ text }}</li>
+                    {% endfor %}
+                    </ul>
+                {% elseif question.type in ['K', 'Q'] %} {# Multiple Numerical/Text #}
+                    <ul>
+                    {% for subquestion, value in question.answers %}
+                        <li><strong>{{ subquestion }}:</strong> {{ value }}</li>
+                    {% endfor %}
+                    </ul>
+                {% elseif question.type == 'R' %} {# Ranking #}
+                    {% if rankingDisplayType == 'numbered' %}
+                        <ol>
+                            {% for rank, text in question.answers %}
+                                <li>{{ text }}</li>
+                            {% endfor %}
+                        </ol>
+                    {% else %}
+                        <ul>
+                            {% for rank, text in question.answers %}
+                                <li>{{ text }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% else %} {# Simple question types #}
+                    <p>{{ responsevalue[question.code] | default('') }}</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</body>
+</html>

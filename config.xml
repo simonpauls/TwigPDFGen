@@ -4,11 +4,11 @@
         <name>TwigPdfGenerator</name>
         <type>plugin</type>
         <creationDate>2026-03-16</creationDate>
-        <lastUpdate>2026-03-16</lastUpdate>
+        <lastUpdate>2026-03-17</lastUpdate>
         <author>SirPauls</author>
         <authorUrl>https://sirpauls.com</authorUrl>
         <supportUrl>https://sirpauls.com</supportUrl>
-        <version>1.0.5</version>
+        <version>1.1.0</version>
         <license>GNU General Public License v3.0</license>
         <description><![CDATA[Generate a PDF and email from a Twig template. Originally developed by Adam Zammit (LS 6 version ported from: https://gitlab.com/valuematch/twig-pdf-generator/)]]></description>
     </metadata>
