@@ -4,6 +4,7 @@ This plugin for LimeSurvey allows you to generate professional, customized PDF r
 
 ## Features
 
+*   **Customizable Report Content**: Select exactly which questions appear in the PDF report via a multi-select option in the plugin settings.
 *   **Dynamic PDF Generation**: Create PDF reports from survey responses on the fly.
 *   **Twig Templating**: Utilize the flexible and powerful Twig templating engine to design your PDFs with custom HTML and CSS.
 *   **Comprehensive Question Type Support**: Extensive support for all major LimeSurvey question types, including:
@@ -33,7 +34,8 @@ This plugin for LimeSurvey allows you to generate professional, customized PDF r
 ## Usage
 
 1.  Navigate to the "Simple plugin settings" for your survey.
-2.  Enable automatic emailing if desired. The plugin will search for a question with the code "email" or use the email from the participant table.
+2.  **Select Questions**: Use the "Select questions to display in the report" multi-select field to choose which questions to include. If you leave it empty, all questions will be displayed by default.
+3.  Enable automatic emailing if desired. The plugin will search for a question with the code "email" or use the email from the participant table.
 3.  Customize the PDF metadata (Title, Author, Subject, etc.).
 4.  Define the PDF filename. You can use Twig syntax for dynamic naming (e.g., `report-{{ response.id }}.pdf`).
 5.  Set the email subject line, also with Twig support.
