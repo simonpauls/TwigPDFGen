@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ response.startlanguage|default('de') }}">
 <head>
     <meta charset="UTF-8">
     <title>Survey Response Summary</title>
@@ -21,8 +21,8 @@
 <body>
     <div class="card">
         <div class="header">
-            <h1>Ihr Ergebnisbericht</h1>
-            <p>Vielen Dank für Ihre Teilnahme an der Umfrage.</p>
+            <h1>{{ gT('Ihr Ergebnisbericht') }}</h1>
+            <p>{{ gT('Vielen Dank für Ihre Teilnahme an der Umfrage.') }}</p>
         </div>
 
         {% for question in questions %}
@@ -50,7 +50,7 @@
                                     {% set subQ = questions[question.code ~ '_' ~ code] %}
                                     {% if subQ.comment is not empty %}
                                         <div style="font-style: italic; color: #7f8c8d; font-size: 9pt; margin-left: 10px;">
-                                            Kommentar: {{ subQ.comment|striptags }}
+                                            {{ gT('Kommentar:') }} {{ subQ.comment|striptags }}
                                         </div>
                                     {% endif %}
                                 </div>
@@ -80,7 +80,7 @@
                         {# Display comment if available #}
                         {% if question.comment is not empty %}
                             <div style="margin-top: 10px; font-style: italic; color: #7f8c8d; border-top: 1px dashed #eee; padding-top: 10px;">
-                                <strong>Kommentar:</strong> {{ question.comment|striptags }}
+                                <strong>{{ gT('Kommentar:') }}</strong> {{ question.comment|striptags }}
                             </div>
                         {% endif %}
 

@@ -145,19 +145,26 @@ JS;
 
     protected function previewPdf($surveyId, $responseId, $download = false)
     {
-        $responseData = $this->api->getResponse($surveyId, $responseId);
-        $responseValueData = $this->getResponseValue($surveyId, $responseId);
-        $context = $this->createContext($surveyId, $responseData, $responseValueData);
-        $pdfPlate = $this->get('pdfPlate', 'Survey', $surveyId);
-        if ($download ) {
-            $pdfFilename = $this->renderTwig($this->get('pdfFilename', 'Survey', $surveyId, 'report.pdf'), $context);
-            header("Content-Disposition: attachment; filename=\"$pdfFilename\"");
-        }
+        try {
+            $responseData = $this->api->getResponse($surveyId, $responseId);
+            $responseValueData = $this->getResponseValue($surveyId, $responseId);
+            $context = $this->createContext($surveyId, $responseData, $responseValueData);
+            $pdfPlate = $this->get('pdfPlate', 'Survey', $surveyId);
+            if ($download ) {
+                $pdfFilename = $this->renderTwig($this->get('pdfFilename', 'Survey', $surveyId, 'report.pdf'), $context);
+                header("Content-Disposition: attachment; filename=\"$pdfFilename\"");
+            }
 
-        header('Content-Type: application/pdf');
-        header('Content-Transfer-Encoding: binary');
-        echo $this->htmlToPdf($this->renderTwig($pdfPlate, $context), 'S', $surveyId);
-        die();
+            header('Content-Type: application/pdf');
+            header('Content-Transfer-Encoding: binary');
+            echo $this->htmlToPdf($this->renderTwig($pdfPlate, $context), 'S', $surveyId);
+            die();
+        } catch (\Throwable $e) {
+            header('Content-Type: text/html; charset=utf-8');
+            echo "<h1>Error generating PDF</h1>";
+            echo "<pre>" . $e->getMessage() . "\n\n" . $e->getTraceAsString() . "</pre>";
+            die();
+        }
     }
 
     protected function previewMail($surveyId, $responseId)
@@ -191,11 +198,16 @@ HTML;
     protected function createContext($surveyId, array $responseData, $responseValueData = false)
     {
         $context = [];
+        $displayedQuestions = $this->get('displayedQuestions', 'Survey', $surveyId, []);
+
         // Iterate over all questions.
         $lang = isset($responseData['startlanguage']) ? $responseData['startlanguage'] : 'en';
         foreach($this->api->getQuestions($surveyId, $lang, [
             'parent_qid' => 0
         ]) as $question) {
+            if (!empty($displayedQuestions) && !in_array($question->title, $displayedQuestions)) {
+                continue;
+            }
             $row = [
                 'group_id' => $question->gid,
                 'code' => $question->title,
@@ -431,7 +443,7 @@ HTML;
         } catch (\CDbException $e) {
             // Do nothing; survey was not active.
         } catch (\Exception $e) {
-
+            \Yii::log("Error in afterSurveyComplete: " . $e->getMessage() . "\n" . $e->getTraceAsString(), 'error', 'TwigPdfGenerator');
         }
     }
 
@@ -473,6 +485,14 @@ HTML;
 
     public function beforeSurveySettings()
     {
+        $surveyId = $this->event->get('survey');
+        $survey = \Survey::model()->findByPk($surveyId);
+        $questions = $survey->questions;
+        $questionOptions = [];
+        foreach ($questions as $question) {
+            $questionOptions[$question->title] = $question->title . ': ' . strip_tags($question->question);
+        }
+
         /** @var \Survey $survey */
         $settings = [
             'name' => "TwigPdfGenerator",
@@ -481,6 +501,13 @@ HTML;
                     'type' => 'boolean',
                     'label' => 'Enable automatic sending (will send to any address stored in the survey with the question code "email", or the email in the particpants table)',
                     'current' => $this->get('enabled', 'Survey', $this->event->get('survey'), 0)
+                ],
+                'displayedQuestions' => [
+                    'type' => 'select',
+                    'label' => 'Select questions to display in the report',
+                    'options' => $questionOptions,
+                    'multiple' => true,
+                    'current' => $this->get('displayedQuestions', 'Survey', $surveyId, [])
                 ],
                 'pdfAuthor' => [
                     'type' => 'string',
@@ -601,7 +628,7 @@ HTML;
 
         // Validate
         foreach($settings as $key => $value) {
-            if (strpos($key, 'Template') !== false) {
+            if (strpos($key, 'Plate') !== false || strpos($key, 'Filename') !== false || strpos($key, 'Subject') !== false) {
                 try {
                     $this->renderTwig($value, $this->createContext($surveyId, [], false), $key);
                 } catch (\Throwable $e) {
@@ -651,6 +678,9 @@ HTML;
             'cache' => $this->getTempDir(),
             'strict_variables' => false
         ]);
+        $twig->addFunction(new \Twig\TwigFunction('gT', function($string) {
+            return function_exists('gT') ? gT($string) : $string;
+        }));
 
         return $twig->load($key)->render($context);
     }
