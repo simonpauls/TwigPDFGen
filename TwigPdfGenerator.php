@@ -114,20 +114,31 @@ JS;
         $download = true;
         if (!isset($responseId)) {
             $download = false;
+            // 1. Try to find the latest submitted response
             $responses = $this->api->getResponses($surveyId, [], [
                 'condition' => 'submitdate is not null',
                 'order' => 'id desc',
                 'limit' => 1,
                 'select' => 'id'
             ]);
+            
+            // 2. Fallback: try to find ANY response (even unsubmitted) for preview purposes
+            if (empty($responses)) {
+                $responses = $this->api->getResponses($surveyId, [], [
+                    'order' => 'id desc',
+                    'limit' => 1,
+                    'select' => 'id'
+                ]);
+            }
+
             if (!empty($responses)) {
                 $responseId = $responses[0]->id;
             }
         }
 
         if (!isset($responseId)) {
-            http_response_code(404);
-            die('Not found');
+            header('Content-Type: text/html; charset=utf-8');
+            die("<h1>No response found</h1><p>The preview requires at least one response in the survey (Survey ID: $surveyId). Please complete the survey once or add a dummy response.</p>");
         }
 
         if ($this->event->get('function') == 'previewPdf') {
@@ -150,6 +161,11 @@ JS;
             $responseValueData = $this->getResponseValue($surveyId, $responseId);
             $context = $this->createContext($surveyId, $responseData, $responseValueData);
             $pdfPlate = $this->get('pdfPlate', 'Survey', $surveyId);
+
+            if (empty($pdfPlate)) {
+                throw new \Exception("PDF Template is empty. Please configure it in the survey settings (Simple Plugins).");
+            }
+
             if ($download ) {
                 $pdfFilename = $this->renderTwig($this->get('pdfFilename', 'Survey', $surveyId, 'report.pdf'), $context);
                 header("Content-Disposition: attachment; filename=\"$pdfFilename\"");
@@ -162,24 +178,32 @@ JS;
         } catch (\Throwable $e) {
             header('Content-Type: text/html; charset=utf-8');
             echo "<h1>Error generating PDF</h1>";
-            echo "<pre>" . $e->getMessage() . "\n\n" . $e->getTraceAsString() . "</pre>";
+            echo "<p><strong>Message:</strong> " . $e->getMessage() . "</p>";
+            echo "<h3>Stack Trace:</h3>";
+            echo "<pre>" . $e->getTraceAsString() . "</pre>";
             die();
         }
     }
 
     protected function previewMail($surveyId, $responseId)
     {
-        $responseData = $this->api->getResponse($surveyId, $responseId);
-        $responseValueData = $this->getResponseValue($surveyId, $responseId);
-        $context = $this->createContext($surveyId, $responseData, $responseValueData);
-        $mailPlate = $this->get('mailPlate', 'Survey', $surveyId);
-        $mailSubjectTemplate = $this->get('mailSubject', 'Survey', $surveyId);
-        $subject = $this->renderTwig($mailSubjectTemplate, $context);
-        $iframe = \CHtml::tag('iframe', [
-            'srcdoc' => $this->renderTwig($mailPlate, $context),
-            'style' => 'width: 100%; height: 100%; border: none;'
-        ]);
-        echo <<<HTML
+        try {
+            $responseData = $this->api->getResponse($surveyId, $responseId);
+            $responseValueData = $this->getResponseValue($surveyId, $responseId);
+            $context = $this->createContext($surveyId, $responseData, $responseValueData);
+            $mailPlate = $this->get('mailPlate', 'Survey', $surveyId);
+
+            if (empty($mailPlate)) {
+                throw new \Exception("Mail Template is empty. Please configure it in the survey settings (Simple Plugins).");
+            }
+
+            $mailSubjectTemplate = $this->get('mailSubject', 'Survey', $surveyId);
+            $subject = $this->renderTwig($mailSubjectTemplate, $context);
+            $iframe = \CHtml::tag('iframe', [
+                'srcdoc' => $this->renderTwig($mailPlate, $context),
+                'style' => 'width: 100%; height: 100%; border: none;'
+            ]);
+            echo <<<HTML
 <html>
 <title>Mail preview</title>
 <body style="padding: 0px; margin: 0px;">
@@ -192,8 +216,15 @@ $iframe
 </body>
 </html>
 HTML;
-
-        die();
+            die();
+        } catch (\Throwable $e) {
+            header('Content-Type: text/html; charset=utf-8');
+            echo "<h1>Error generating Mail Preview</h1>";
+            echo "<p><strong>Message:</strong> " . $e->getMessage() . "</p>";
+            echo "<h3>Stack Trace:</h3>";
+            echo "<pre>" . $e->getTraceAsString() . "</pre>";
+            die();
+        }
     }
     protected function createContext($surveyId, array $responseData, $responseValueData = false)
     {
@@ -225,9 +256,14 @@ HTML;
             $row['comment'] = isset($responseData[$commentKey]) ? $responseData[$commentKey] : null;
 
             // Initialize answers array for complex types
-            // Complex types include: Multiple Choice, Arrays, Ranking, File Upload, List with Comment
-            if (in_array($question->type, ["M", "P", "K", "Q", "R", "A", "B", "C", "E", "F", "H", ":", ";", "Z", "|"])) {
+            // Complex types include: Multiple Choice, Arrays, Ranking, File Upload, List with Comment, and single-choice Lists
+            if (in_array($question->type, ["M", "P", "K", "Q", "R", "A", "B", "C", "E", "F", "H", ":", ";", "Z", "|", "L", "!", "W", "O"])) {
                 $row['answers'] = [];
+            }
+
+            // For single-choice lists, populate the answers array with the selected value label
+            if (in_array($question->type, ["L", "!", "W", "O", "Z"]) && !empty($row['value'])) {
+                $row['answers'][] = $row['value'];
             }
 
             // Specific handling for File Upload (|)
