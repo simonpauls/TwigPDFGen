@@ -198,7 +198,8 @@ HTML;
     protected function createContext($surveyId, array $responseData, $responseValueData = false)
     {
         $context = [];
-        $displayedQuestions = $this->get('displayedQuestions', 'Survey', $surveyId, []);
+        $displayedQuestionsStr = $this->get('displayedQuestions', 'Survey', $surveyId, '');
+        $displayedQuestions = array_filter(array_map('trim', explode(',', $displayedQuestionsStr)));
 
         // Iterate over all questions.
         $lang = isset($responseData['startlanguage']) ? $responseData['startlanguage'] : 'en';
@@ -248,101 +249,89 @@ HTML;
                 $row['truePositives'] = [];
             }
 
-            // Iterate over subquestions
-            foreach($question->subquestions as $subQuestion) {
-                $srow = [
-                    'group_id' => $question->gid,
-                    'code' => $subQuestion->title,
-                    'text' => $subQuestion->questionl10ns[$lang]->question,
-                    'helpText' => $subQuestion->questionl10ns[$lang]->help,
-                ];
-                     
-                // Construct potential keys for data lookup
-                $responseKey = "{$question->title}_{$subQuestion->title}";
-                $rawKey = "{$surveyId}X{$question->gid}X{$question->qid}{$subQuestion->title}";
-                $rawKey2 = "{$surveyId}X{$question->gid}X{$question->qid}_{$subQuestion->title}";
-
-                // 1. Try mapped code from responseValueData
-                $val = isset($responseValueData[$responseKey]) ? $responseValueData[$responseKey] : null;
-                
-                // 2. Try raw SIDXGIDXQID format from responseData
-                if (empty($val)) {
-                    if (isset($responseData[$rawKey])) {
-                        $val = $responseData[$rawKey];
-                    } elseif (isset($responseData[$rawKey2])) {
-                        $val = $responseData[$rawKey2];
+            if ($question->type == "R") {
+                // Ranking questions: extract ranks from responseValueData or responseData
+                $rankings = [];
+                // 1. Try to find mapped values (e.g. Q1_1 => 'First Choice Text')
+                foreach ($responseValueData as $rvKey => $rvVal) {
+                    if (preg_match('/^' . preg_quote($question->title, '/') . '_(\d+)$/', $rvKey, $matches)) {
+                        $rank = (int)$matches[1];
+                        if (!empty($rvVal)) {
+                            $rankings[$rank] = $rvVal;
+                        }
                     }
                 }
 
-                // 3. Fallback for ranking questions: map items to ranks
-                if ($question->type == "R") {
-                    // In ranking questions, the response data (both raw and mapped) 
-                    // usually has keys like Q18_1, Q18_2... where the value is the item code.
-                    // We need to find which rank (suffix) has this subquestion's code as its value.
-                    
-                    // Check mapped values first
-                    foreach ($responseValueData as $rvKey => $rvVal) {
-                        // Check if key starts with question title (e.g. Q18_1)
-                        if (strpos($rvKey, $question->title) === 0) {
-                            $cleanRvVal = trim(strip_tags(html_entity_decode($rvVal)));
-                            $cleanSubQText = trim(strip_tags(html_entity_decode($subQuestion->questionl10ns[$lang]->question)));
-                            
-                            // Check if value matches subquestion title (code) or text
-                            if ($rvVal == $subQuestion->title || $cleanRvVal == $cleanSubQText) {
-                                // Extract rank from key (e.g. 1 from Q18_1)
-                                if (preg_match('/_(\d+)$/', $rvKey, $matches)) {
-                                    $rank = $matches[1];
-                                    $row['answers'][(int)$rank] = $subQuestion->questionl10ns[$lang]->question;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Check raw values as well
+                // 2. Fallback to raw responseData (e.g. 1234X56X781 => 'A1')
+                if (empty($rankings)) {
+                    $prefix = "{$surveyId}X{$question->gid}X{$question->qid}";
                     foreach ($responseData as $rKey => $rVal) {
-                        // Match Q18_1 or SIDXGIDXQID1
-                        // Ensure we are looking at the right question by checking QID inclusion or Title prefix
-                        if (strpos($rKey, $question->title . '_') === 0 || strpos($rKey, (string)$question->qid) !== false) {
-                            if ($rVal == $subQuestion->title || $rVal == $subQuestion->qid . $subQuestion->title) {
-                                $rank = null;
-                                if (preg_match('/_(\d+)$/', $rKey, $matches)) {
-                                    $rank = $matches[1];
-                                } elseif (preg_match('/X' . $question->qid . '(\d+)$/', $rKey, $matches)) {
-                                    // Match SIDXGIDXQID1 format where 1 is rank
-                                    $rank = $matches[1];
-                                }
-                                
-                                if ($rank !== null && is_numeric($rank)) {
-                                    $row['answers'][(int)$rank] = $subQuestion->questionl10ns[$lang]->question;
-                                }
+                        if (strpos($rKey, $prefix) === 0 && preg_match('/^(\d+)$/', substr($rKey, strlen($prefix)), $matches)) {
+                            $rank = (int)$matches[1];
+                            if (!empty($rVal)) {
+                                // Try to get the translated answer text for this code
+                                $answer = \Answer::model()->findByAttributes([
+                                    'qid' => $question->qid,
+                                    'code' => $rVal,
+                                    'language' => $lang
+                                ]);
+                                $rankings[$rank] = $answer ? $answer->answer : $rVal;
                             }
                         }
                     }
                 }
 
-                // 4. Ultimate fallback: try searching responseData for any key containing SID, GID, QID and SQ title
-                if (empty($val)) {
-                    foreach ($responseData as $rKey => $rVal) {
-                        if (strpos($rKey, (string)$question->qid) !== false && strpos($rKey, $subQuestion->title) !== false) {
-                            $val = $rVal;
-                            break;
+                ksort($rankings);
+                $row['answers'] = $rankings;
+            } else {
+                // Iterate over subquestions for non-ranking complex types
+                foreach($question->subquestions as $subQuestion) {
+                    $srow = [
+                        'group_id' => $question->gid,
+                        'code' => $subQuestion->title,
+                        'text' => $subQuestion->questionl10ns[$lang]->question,
+                        'helpText' => $subQuestion->questionl10ns[$lang]->help,
+                    ];
+                         
+                    // Construct potential keys for data lookup
+                    $responseKey = "{$question->title}_{$subQuestion->title}";
+                    $rawKey = "{$surveyId}X{$question->gid}X{$question->qid}{$subQuestion->title}";
+                    $rawKey2 = "{$surveyId}X{$question->gid}X{$question->qid}_{$subQuestion->title}";
+    
+                    // 1. Try mapped code from responseValueData
+                    $val = isset($responseValueData[$responseKey]) ? $responseValueData[$responseKey] : null;
+                    
+                    // 2. Try raw SIDXGIDXQID format from responseData
+                    if (empty($val)) {
+                        if (isset($responseData[$rawKey])) {
+                            $val = $responseData[$rawKey];
+                        } elseif (isset($responseData[$rawKey2])) {
+                            $val = $responseData[$rawKey2];
                         }
                     }
-                }
-
-                $checked = !empty($val);
-                $srow['value'] = $val;
-                $srow['checked'] = $checked;
-
-                // Check for subquestion comment (common in Multiple Choice with comments)
-                $sqCommentKey = "{$question->title}_{$subQuestion->title}comment";
-                $srow['comment'] = isset($responseData[$sqCommentKey]) ? $responseData[$sqCommentKey] : null;
-
-                // Add subquestion data to global context
-                $context['questions'][$question->title . "_" . $subQuestion->title] = $srow;
-
-                // Populate the parent question's answers array for other types
-                if ($question->type != "R") {
+    
+                    // 4. Ultimate fallback: try searching responseData for any key containing SID, GID, QID and SQ title
+                    if (empty($val)) {
+                        foreach ($responseData as $rKey => $rVal) {
+                            if (strpos($rKey, (string)$question->qid) !== false && strpos($rKey, $subQuestion->title) !== false) {
+                                $val = $rVal;
+                                break;
+                            }
+                        }
+                    }
+    
+                    $checked = !empty($val);
+                    $srow['value'] = $val;
+                    $srow['checked'] = $checked;
+    
+                    // Check for subquestion comment (common in Multiple Choice with comments)
+                    $sqCommentKey = "{$question->title}_{$subQuestion->title}comment";
+                    $srow['comment'] = isset($responseData[$sqCommentKey]) ? $responseData[$sqCommentKey] : null;
+    
+                    // Add subquestion data to global context
+                    $context['questions'][$question->title . "_" . $subQuestion->title] = $srow;
+    
+                    // Populate the parent question's answers array for other types
                     if ($checked) {
                         if (in_array($question->type, ["M", "P"])) {
                             // Multiple Choice: store label
@@ -352,22 +341,22 @@ HTML;
                             $row['answers'][$subQuestion->title] = $val;
                         }
                     }
-                }
-
-                // Specific logic for Multiple Choice analysis
-                if (in_array($question->type, ["M", "P"])) {
-                    if (strncmp($subQuestion->title, 'C', 1) === 0) {
-                        if ($checked) {
-                            $row['truePositives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
-                        } else {
-                            $row['falseNegatives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+    
+                    // Specific logic for Multiple Choice analysis
+                    if (in_array($question->type, ["M", "P"])) {
+                        if (strncmp($subQuestion->title, 'C', 1) === 0) {
+                            if ($checked) {
+                                $row['truePositives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+                            } else {
+                                $row['falseNegatives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+                            }
                         }
-                    }
-                    if (strncmp($subQuestion->title, 'I', 1) === 0) {
-                        if ($checked) {
-                            $row['falsePositives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
-                        } else {
-                            $row['trueNegatives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+                        if (strncmp($subQuestion->title, 'I', 1) === 0) {
+                            if ($checked) {
+                                $row['falsePositives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+                            } else {
+                                $row['trueNegatives'][$subQuestion->title] = $subQuestion->questionl10ns[$lang]->question;
+                            }
                         }
                     }
                 }
@@ -489,135 +478,124 @@ HTML;
         $questionOptions = [];
 
         if ($surveyId) {
-            $survey = \Survey::model()->findByPk($surveyId);
-            if ($survey) {
-                $questions = $survey->questions;
-                foreach ($questions as $question) {
-                    $questionOptions[$question->title] = $question->title . ': ' . strip_tags($question->question);
+            try {
+                $survey = \Survey::model()->findByPk($surveyId);
+                if ($survey) {
+                    $lang = $survey->language;
+                    // Use LimeSurvey's built-in API to safely get questions without raw SQL errors.
+                    $questions = $this->api->getQuestions($surveyId, $lang, ['parent_qid' => 0]);
+                    
+                    if (!empty($questions)) {
+                        foreach ($questions as $question) {
+                            $qText = isset($question->questionl10ns[$lang]) ? $question->questionl10ns[$lang]->question : $question->question;
+                            $questionOptions[$question->title] = $question->title . ': ' . strip_tags((string)$qText);
+                        }
+                    }
                 }
+            } catch (\Exception $e) {
+                // Log the error and continue without the question selector to prevent crashing the settings page.
+                \Yii::log('Error loading questions for TwigPdfGenerator: ' . $e->getMessage(), 'error', 'TwigPdfGenerator');
             }
         }
 
-        /** @var \Survey $survey */
+        // Base settings array
         $settings = [
             'name' => "TwigPdfGenerator",
             'settings' => [
                 'enabled' => [
                     'type' => 'boolean',
-                    'label' => 'Enable automatic sending (will send to any address stored in the survey with the question code "email", or the email in the particpants table)',
-                    'current' => $this->get('enabled', 'Survey', $this->event->get('survey'), 0)
+                    'label' => 'Enable automatic sending',
+                    'current' => $this->get('enabled', 'Survey', $surveyId, 0)
                 ],
                 'displayedQuestions' => [
-                    'type' => 'select',
+                    'type' => 'string',
                     'label' => 'Select questions to display in the report',
-                    'options' => $questionOptions,
-                    'multiple' => true,
-                    'current' => $this->get('displayedQuestions', 'Survey', $surveyId, [])
+                    'help' => 'Enter a comma-separated list of question codes (e.g. Q01,Q02,Q03). Leave empty to show all.',
+                    'current' => $this->get('displayedQuestions', 'Survey', $surveyId, '')
                 ],
-                'pdfAuthor' => [
-                    'type' => 'string',
-                    'label' => 'PDF Author',
-                    'current' => $this->get('pdfAuthor', 'Survey', $this->event->get('survey'))
-                ],
-                'pdfTitle' => [
-                    'type' => 'string',
-                    'label' => 'PDF Title',
-                    'help' => 'This is used in the header as well as the meta data',
-                    'current' => $this->get('pdfTitle', 'Survey', $this->event->get('survey'))
-                ],
-                'pdfHeaderLogo' => [
-                    'type' => 'string',
-                    'label' => 'PDF Header logo',
-                    'help' => 'Must be a URL or absolute path',
-                    'current' => $this->get('pdfHeaderLogo', 'Survey', $this->event->get('survey'))
-                ],
-                'pdfHeaderWidth' => [
-                    'type' => 'int',
-                    'label' => 'PDF Header width',
-                    'help' => 'In MM, page width for A4 is 210mm',
-                    'current' => $this->get('pdfHeaderWidth', 'Survey', $this->event->get('survey'), 50)
-                ],
-                'pdfSubject' => [
-                    'type' => 'string',
-                    'label' => 'PDF Subject',
-                    'current' => $this->get('pdfSubject', 'Survey', $this->event->get('survey'))
-                ],
-                'pdfFilename' => [
-                    'type' => 'string',
-                    'label' => 'PDF Filename',
-                    'current' => $this->get('pdfFilename', 'Survey', $this->event->get('survey'), 'report.pdf'),
-                    'help' => 'Name of the attachment, should end in ".pdf", can use twig template.'
-                ],
-                'mailSubject' => [
-                    'type' => 'string',
-                    'label' => 'Mail Subject',
-                    'current' => $this->get('mailSubject', 'Survey', $this->event->get('survey'))
-                ],
-                'mailCopy' => [
-                    'type' => 'string',
-                    'label' => 'Copy email',
-                    'help' => 'Send a copy of any outbound emails to this address, split multiple addressed with a ";"',
-                    'current' => $this->get('mailCopy', 'Survey', $this->event->get('survey'))
-                ],
-                'rankingDisplayType' => [
-                    'type' => 'select',
-                    'label' => 'Ranking Question Display Format',
-                    'options' => [
-                        'numbered' => 'Numbered List',
-                        'bullet' => 'Bulleted List'
-                    ],
-                    'help' => 'Choose how to display the ranked items in the PDF report.',
-                    'current' => $this->get('rankingDisplayType', 'Survey', $this->event->get('survey'), 'numbered')
-                ]
             ]
         ];
 
+        // Define and merge the rest of the settings
+        $otherSettings = [
+            'pdfAuthor' => [
+                'type' => 'string',
+                'label' => 'PDF Author',
+                'current' => $this->get('pdfAuthor', 'Survey', $surveyId)
+            ],
+            'pdfTitle' => [
+                'type' => 'string',
+                'label' => 'PDF Title',
+                'help' => 'This is used in the header as well as the meta data',
+                'current' => $this->get('pdfTitle', 'Survey', $surveyId)
+            ],
+            'pdfHeaderLogo' => [
+                'type' => 'string',
+                'label' => 'PDF Header logo',
+                'help' => 'Must be a URL or absolute path',
+                'current' => $this->get('pdfHeaderLogo', 'Survey', $surveyId)
+            ],
+            'pdfHeaderWidth' => [
+                'type' => 'int',
+                'label' => 'PDF Header width',
+                'help' => 'In MM, page width for A4 is 210mm',
+                'current' => $this->get('pdfHeaderWidth', 'Survey', $surveyId, 50)
+            ],
+            'pdfSubject' => [
+                'type' => 'string',
+                'label' => 'PDF Subject',
+                'current' => $this->get('pdfSubject', 'Survey', $surveyId)
+            ],
+            'pdfFilename' => [
+                'type' => 'string',
+                'label' => 'PDF Filename',
+                'current' => $this->get('pdfFilename', 'Survey', $surveyId, 'report.pdf'),
+                'help' => 'Name of the attachment, should end in ".pdf", can use twig template.'
+            ],
+            'mailSubject' => [
+                'type' => 'string',
+                'label' => 'Mail Subject',
+                'current' => $this->get('mailSubject', 'Survey', $surveyId)
+            ],
+            'mailCopy' => [
+                'type' => 'string',
+                'label' => 'Copy email',
+                'help' => 'Send a copy of any outbound emails to this address, split multiple addressed with a ";"',
+                'current' => $this->get('mailCopy', 'Survey', $surveyId)
+            ],
+            'rankingDisplayType' => [
+                'type' => 'select',
+                'label' => 'Ranking Question Display Format',
+                'options' => [
+                    'numbered' => 'Numbered List',
+                    'bullet' => 'Bulleted List'
+                ],
+                'help' => 'Choose how to display the ranked items in the PDF report.',
+                'current' => $this->get('rankingDisplayType', 'Survey', $surveyId, 'numbered')
+            ]
+        ];
 
+        $settings['settings'] = array_merge($settings['settings'], $otherSettings);
 
+        // Add template editors and action buttons
         $settings['settings']['pdfPlate'] = [
             'type' => 'text',
             'label' => "PDF Template",
             'help' => $this->getHelpText("pdfPlate"),
-            'current' => isset($this->errors["pdfPlate"])
-            ? $this->errors["pdfPlate"]['value']
-            : $this->get("pdfPlate", 'Survey', $this->event->get('survey')),
+            'current' => isset($this->errors["pdfPlate"]) ? $this->errors["pdfPlate"]['value'] : $this->get("pdfPlate", 'Survey', $surveyId),
         ];
         $settings['settings']['mailPlate'] = [
             'type' => 'text',
             'label' => "Mail Template",
             'help' => $this->getHelpText("mailPlate"),
-            'current' => isset($this->errors["mailPlate"])
-            ? $this->errors["mailPlate"]['value']
-            : $this->get("mailPlate", 'Survey', $this->event->get('survey'))
+            'current' => isset($this->errors["mailPlate"]) ? $this->errors["mailPlate"]['value'] : $this->get("mailPlate", 'Survey', $surveyId)
         ];
-
         $settings['settings']['previewPdf'] = [
             'type' => 'info',
             'label' => 'Actions',
             'content' =>
-            \CHtml::link("Preview PDF",
-                $this->api->createUrl('plugins/direct', [
-                    'plugin' => $this->getName(),
-                    'function' => 'previewPdf',
-                    'surveyId' => $this->event->get('survey'),
-                ]),
-                [
-                    'target' => 'previewPdf',
-                    'style' => "padding: 5px; border-radius: 5px;",
-                    'class' => 'ui-state-default'
-                ]
-            ) . \CHtml::link("Preview Mail",
-            $this->api->createUrl('plugins/direct', [
-                'plugin' => $this->getName(),
-                'function' => 'previewMail',
-                'surveyId' => $this->event->get('survey'),
-            ]),
-            [
-                'target' => 'previewMail',
-                'style' => "padding: 5px; border-radius: 5px;",
-                'class' => 'ui-state-default'
-            ]
-            )
+            \CHtml::link("Preview PDF", $this->api->createUrl('plugins/direct', ['plugin' => $this->getName(), 'function' => 'previewPdf', 'surveyId' => $surveyId]), ['target' => 'previewPdf', 'style' => "padding: 5px; border-radius: 5px;", 'class' => 'ui-state-default']) .
+            \CHtml::link("Preview Mail", $this->api->createUrl('plugins/direct', ['plugin' => $this->getName(), 'function' => 'previewMail', 'surveyId' => $surveyId]), ['target' => 'previewMail', 'style' => "padding: 5px; border-radius: 5px;", 'class' => 'ui-state-default'])
         ];
 
         $this->event->set("surveysettings.{$this->id}", $settings);
