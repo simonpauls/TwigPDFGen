@@ -486,11 +486,16 @@ HTML;
     public function beforeSurveySettings()
     {
         $surveyId = $this->event->get('survey');
-        $survey = \Survey::model()->findByPk($surveyId);
-        $questions = $survey->questions;
         $questionOptions = [];
-        foreach ($questions as $question) {
-            $questionOptions[$question->title] = $question->title . ': ' . strip_tags($question->question);
+
+        if ($surveyId) {
+            $survey = \Survey::model()->findByPk($surveyId);
+            if ($survey) {
+                $questions = $survey->questions;
+                foreach ($questions as $question) {
+                    $questionOptions[$question->title] = $question->title . ': ' . strip_tags($question->question);
+                }
+            }
         }
 
         /** @var \Survey $survey */
