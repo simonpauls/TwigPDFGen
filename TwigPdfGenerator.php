@@ -234,6 +234,19 @@ HTML;
 
         // Iterate over all questions.
         $lang = isset($responseData['startlanguage']) ? $responseData['startlanguage'] : 'en';
+
+        // Fetch translated group names
+        $groupNames = [];
+        $groups = \QuestionGroup::model()->findAllByAttributes(['sid' => $surveyId]);
+        foreach ($groups as $group) {
+            $l10n = \QuestionGroupL10n::model()->findByAttributes([
+                'gid' => $group->gid,
+                'language' => $lang
+            ]);
+            $groupNames[$group->gid] = $l10n ? $l10n->group_name : "Group {$group->gid}";
+        }
+        $context['groups'] = $groupNames;
+
         foreach($this->api->getQuestions($surveyId, $lang, [
             'parent_qid' => 0
         ]) as $question) {
@@ -242,6 +255,7 @@ HTML;
             }
             $row = [
                 'group_id' => $question->gid,
+                'group_name' => $groupNames[$question->gid] ?? '',
                 'code' => $question->title,
                 'text' => $question->questionl10ns[$lang]->question,
                 'helpText' => $question->questionl10ns[$lang]->help,
@@ -324,6 +338,7 @@ HTML;
                 foreach($question->subquestions as $subQuestion) {
                     $srow = [
                         'group_id' => $question->gid,
+                        'group_name' => $groupNames[$question->gid] ?? '',
                         'code' => $subQuestion->title,
                         'text' => $subQuestion->questionl10ns[$lang]->question,
                         'helpText' => $subQuestion->questionl10ns[$lang]->help,
