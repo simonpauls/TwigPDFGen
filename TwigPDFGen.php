@@ -32,13 +32,13 @@ require_once __DIR__ . '/vendor/autoload.php';
  */
 
 
-class TwigPdfGenerator extends PluginBase
+class TwigPDFGen extends PluginBase
 {
 
     protected $storage = 'DbStorage';
 
     static protected $description = 'Generate a PDF and email from a Twig template';
-    static protected $name = 'TwigPdfGenerator';
+    static protected $name = 'TwigPDFGen';
 
     private function getTempDir()
     {
@@ -68,7 +68,7 @@ class TwigPdfGenerator extends PluginBase
             return ;
         }
         $url = $this->api->createUrl('plugins/direct', [
-            'plugin' => self::$name,
+            'plugin' => $this->getName(),
             'function' => 'previewPdf',
             'surveyId' => $matches[1],
             'responseId' => ''
@@ -483,7 +483,7 @@ HTML;
         } catch (\CDbException $e) {
             // Do nothing; survey was not active.
         } catch (\Exception $e) {
-            \Yii::log("Error in afterSurveyComplete: " . $e->getMessage() . "\n" . $e->getTraceAsString(), 'error', 'TwigPdfGenerator');
+            \Yii::log("Error in afterSurveyComplete: " . $e->getMessage() . "\n" . $e->getTraceAsString(), 'error', 'TwigPDFGen');
         }
     }
 
@@ -545,13 +545,13 @@ HTML;
                 }
             } catch (\Exception $e) {
                 // Log the error and continue without the question selector to prevent crashing the settings page.
-                \Yii::log('Error loading questions for TwigPdfGenerator: ' . $e->getMessage(), 'error', 'TwigPdfGenerator');
+                \Yii::log('Error loading questions for TwigPDFGen: ' . $e->getMessage(), 'error', 'TwigPDFGen');
             }
         }
 
         // Base settings array
         $settings = [
-            'name' => "TwigPdfGenerator",
+            'name' => "TwigPDFGen",
             'settings' => [
                 'enabled' => [
                     'type' => 'boolean',
@@ -730,10 +730,10 @@ HTML;
             'tempDir' => $this->getTempDir()
         ]);
 
-        $mpdf->SetAuthor($this->get('pdfAuthor', 'Survey', $surveyId, 'TwigPdfGenerator'));
+        $mpdf->SetAuthor($this->get('pdfAuthor', 'Survey', $surveyId, 'TwigPDFGen'));
         $mpdf->SetTitle($this->get('pdfTitle', 'Survey', $surveyId, 'Ergebnisbericht'));
         $mpdf->SetSubject($this->get('pdfSubject', 'Survey', $surveyId, 'Persönlichkeits- und Kompetenztest 55+'));
-        $mpdf->SetCreator('TwigPdfGenerator');
+        $mpdf->SetCreator('TwigPDFGen');
 
         // Add custom fonts if needed
         // $fontData = \Mpdf\Font\FontVariables::getFontVariables();
