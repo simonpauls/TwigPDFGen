@@ -32,13 +32,13 @@ require_once __DIR__ . '/vendor/autoload.php';
  */
 
 
-class TwigPdfGenerator extends PluginBase
+class TwigPDFGen extends PluginBase
 {
 
     protected $storage = 'DbStorage';
 
     static protected $description = 'Generate a PDF and email from a Twig template';
-    static protected $name = 'TwigPdfGenerator';
+    static protected $name = 'TwigPDFGen';
 
     private function getTempDir()
     {
@@ -68,7 +68,7 @@ class TwigPdfGenerator extends PluginBase
             return ;
         }
         $url = $this->api->createUrl('plugins/direct', [
-            'plugin' => self::$name,
+            'plugin' => $this->getName(),
             'function' => 'previewPdf',
             'surveyId' => $matches[1],
             'responseId' => ''
