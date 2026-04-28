@@ -435,6 +435,8 @@ HTML;
             $context['token'] = $this->api->getToken($surveyId, $responseData['token'])->attributes;
         }
 
+        $context['LANGUAGE'] = $lang;
+        $context['lang'] = $lang;
         $context['rankingDisplayType'] = $this->get('rankingDisplayType', 'Survey', $surveyId, 'numbered');
     
         return $context;
