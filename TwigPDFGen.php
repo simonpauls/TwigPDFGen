@@ -819,12 +819,32 @@ HTML;
                         }
                     }
                 }
-                //if an answer exists for this newKey and value use that instead
-                $answer = \Answer::model()->getAnswerFromCode($fieldmap[$key]['qid'], $value, $response->attributes['startlanguage']);
-                if ($answer !== null) {
-	                $output[$newKey] = html_entity_decode($answer); //allow html to pass through eg for images
+                // For array/matrix question types the response value IS the scale code (e.g. "1"–"5").
+                // Replacing it with the answer-label text would break numeric lookups in templates.
+                // Only resolve answer labels for list/single-choice question types.
+                $skipAnswerLookup = false;
+                if (array_key_exists($key, $fieldmap)) {
+                    $fmType = isset($fieldmap[$key]['type']) ? $fieldmap[$key]['type'] : '';
+                    // Array / matrix types whose values are numeric scale codes, not answer-table codes
+                    $arrayTypes = ['F', 'H', 'E', 'C', 'A', 'B', ':', ';'];
+                    if (in_array($fmType, $arrayTypes, true)) {
+                        $skipAnswerLookup = true;
+                    }
                 } else {
-                        $output[$newKey] = $value;
+                    // Key not in fieldmap (e.g. submitdate, id) – skip lookup to avoid undefined-index notice
+                    $skipAnswerLookup = true;
+                }
+
+                if (!$skipAnswerLookup) {
+                    $answer = \Answer::model()->getAnswerFromCode($fieldmap[$key]['qid'], $value, $response->attributes['startlanguage']);
+                } else {
+                    $answer = null;
+                }
+
+                if ($answer !== null) {
+                    $output[$newKey] = html_entity_decode($answer); //allow html to pass through eg for images
+                } else {
+                    $output[$newKey] = $value;
                 }
             }
 
