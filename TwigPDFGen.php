@@ -463,9 +463,11 @@ HTML;
             $pdfPlate = $this->get('pdfPlate', 'Survey', $surveyId);
             $mailSubjectTemplate = $this->get('mailSubject', 'Survey', $surveyId);
 
-            $mail = $this->renderTwig($mailPlate, $context);
+            $lang = isset($responseData['startlanguage']) ? $responseData['startlanguage'] : 'en';
+
+            $mail = $this->processExpressions($this->renderTwig($mailPlate, $context), $surveyId, $responseId, $lang);
             $pdf = $this->htmlToPdf($this->renderTwig($pdfPlate, $context), 'S', $surveyId);
-            $mailSubject = $this->renderTwig($mailSubjectTemplate, $context);
+            $mailSubject = $this->processExpressions($this->renderTwig($mailSubjectTemplate, $context), $surveyId, $responseId, $lang);
 
             $toMail = !empty($responseData['email']) ? $responseData['email'] : $tokenEmail;
 
@@ -686,6 +688,37 @@ HTML;
         }
     }
 
+
+    /**
+     * Process LimeSurvey expression manager placeholders (e.g. {if(LANGUAGE=='de',...)} )
+     * in a string, using the given survey/response context so LANGUAGE resolves correctly.
+     *
+     * @param string $text       Already-rendered HTML/text that may contain EM expressions
+     * @param int    $surveyId
+     * @param int    $responseId
+     * @param string $lang       The respondent's language code (e.g. 'de', 'en', 'fi', 'lv')
+     * @return string
+     */
+    protected function processExpressions($text, $surveyId, $responseId, $lang)
+    {
+        if (empty($text)) {
+            return $text;
+        }
+
+        try {
+            $em = \LimeExpressionManager::singleton();
+            // Start a fresh EM session for this survey/response so LANGUAGE etc. are set.
+            \LimeExpressionManager::StartSurvey($surveyId, 'survey', null, false, LEM_PRETTY_PRINT_ALL_SYNTAX);
+            \LimeExpressionManager::JumpStartSurvey($surveyId, $responseId, $lang);
+
+            // ProcessString resolves {if(...)} and all other EM placeholders.
+            $result = \LimeExpressionManager::ProcessString($text, null, [], false, 1, 1, false, false, true);
+            return $result;
+        } catch (\Throwable $e) {
+            \Yii::log('TwigPDFGen: processExpressions failed – ' . $e->getMessage(), 'warning', 'TwigPDFGen');
+            return $text;
+        }
+    }
 
     /**
      * @param $html
