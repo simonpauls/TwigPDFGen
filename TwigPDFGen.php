@@ -149,6 +149,10 @@ JS;
             return $this->previewMail($surveyId, $responseId);
         }
 
+        if ($this->event->get('function') == 'debugContext') {
+            return $this->debugContext($surveyId, $responseId);
+        }
+
 
 
 
@@ -160,6 +164,16 @@ JS;
             $responseData = $this->api->getResponse($surveyId, $responseId);
             $responseValueData = $this->getResponseValue($surveyId, $responseId);
             $context = $this->createContext($surveyId, $responseData, $responseValueData);
+
+            // Inject Q18 debug info into context so template can optionally display it
+            $q18debug = [];
+            foreach ($responseValueData as $k => $v) {
+                if (strpos($k, 'Q18') !== false) {
+                    $q18debug[$k] = $v;
+                }
+            }
+            $context['q18debug'] = $q18debug;
+            $context['plugin_version'] = '1.6.4';
             $pdfPlate = $this->get('pdfPlate', 'Survey', $surveyId);
 
             if (empty($pdfPlate)) {
@@ -353,7 +367,7 @@ HTML;
                     $val = isset($responseValueData[$responseKey]) ? $responseValueData[$responseKey] : null;
                     
                     // 2. Try raw SIDXGIDXQID format from responseData
-                    if (empty($val)) {
+                    if ($val === null || $val === '') {
                         if (isset($responseData[$rawKey])) {
                             $val = $responseData[$rawKey];
                         } elseif (isset($responseData[$rawKey2])) {
@@ -362,7 +376,7 @@ HTML;
                     }
     
                     // 4. Ultimate fallback: try searching responseData for any key containing SID, GID, QID and SQ title
-                    if (empty($val)) {
+                    if ($val === null || $val === '') {
                         foreach ($responseData as $rKey => $rVal) {
                             if (strpos($rKey, (string)$question->qid) !== false && strpos($rKey, $subQuestion->title) !== false) {
                                 $val = $rVal;
@@ -787,7 +801,49 @@ HTML;
     }
 
     /**
-     * Gets a survey response from the database.
+     * Debug endpoint: dumps responsevalue and fieldmap types for Q18 subquestions.
+     * Access via: /index.php/plugins/direct?plugin=TwigPDFGen&function=debugContext&surveyId=X&responseId=Y
+     */
+    protected function debugContext($surveyId, $responseId)
+    {
+        header('Content-Type: text/plain; charset=utf-8');
+
+        $survey   = \Survey::model()->findByPk($surveyId);
+        $response = \SurveyDynamic::model($surveyId)->findByPk($responseId);
+
+        if (!$response) {
+            die("No response found for id $responseId");
+        }
+
+        $lang     = $response->attributes['startlanguage'];
+        $fieldmap = createFieldMap($survey, 'full', null, false, $lang);
+
+        echo "=== FIELDMAP entries for Q18 ===\n";
+        foreach ($fieldmap as $col => $fm) {
+            if (isset($fm['title']) && $fm['title'] === 'Q18') {
+                echo "$col => " . json_encode($fm) . "\n";
+            }
+        }
+
+        echo "\n=== RAW response attributes for Q18 columns ===\n";
+        foreach ($response->attributes as $col => $val) {
+            if (strpos($col, 'Q18') !== false || (isset($fieldmap[$col]['title']) && $fieldmap[$col]['title'] === 'Q18')) {
+                echo "$col = " . var_export($val, true) . "\n";
+            }
+        }
+
+        echo "\n=== getResponseValue output (Q18_* keys) ===\n";
+        $rv = $this->getResponseValue($surveyId, $responseId);
+        foreach ($rv as $k => $v) {
+            if (strpos($k, 'Q18') !== false) {
+                echo "$k = " . var_export($v, true) . "\n";
+            }
+        }
+
+        die();
+    }
+
+    /**
      *
      * @param int $surveyId
      * @param int $responseId
@@ -819,26 +875,36 @@ HTML;
                         }
                     }
                 }
-                // For array/matrix question types the response value IS the scale code (e.g. "1"–"5").
-                // Replacing it with the answer-label text would break numeric lookups in templates.
-                // Only resolve answer labels for list/single-choice question types.
-                $skipAnswerLookup = false;
-                if (array_key_exists($key, $fieldmap)) {
-                    $fmType = isset($fieldmap[$key]['type']) ? $fieldmap[$key]['type'] : '';
-                    // Array / matrix types whose values are numeric scale codes, not answer-table codes
-                    $arrayTypes = ['F', 'H', 'E', 'C', 'A', 'B', ':', ';'];
-                    if (in_array($fmType, $arrayTypes, true)) {
-                        $skipAnswerLookup = true;
+                // Only resolve answer labels when the field is in the fieldmap and has a qid.
+                // Skip for: fields not in fieldmap (submitdate, id, etc.), and array/matrix types
+                // where the stored value is a numeric scale code – not an answer-table code.
+                $answer = null;
+                if (array_key_exists($key, $fieldmap) && !empty($fieldmap[$key]['qid'])) {
+                    // Determine question type – fieldmap may store it under 'type' or 'question_type'
+                    $fmType = '';
+                    if (!empty($fieldmap[$key]['type'])) {
+                        $fmType = $fieldmap[$key]['type'];
+                    } elseif (!empty($fieldmap[$key]['question_type'])) {
+                        $fmType = $fieldmap[$key]['question_type'];
                     }
-                } else {
-                    // Key not in fieldmap (e.g. submitdate, id) – skip lookup to avoid undefined-index notice
-                    $skipAnswerLookup = true;
-                }
 
-                if (!$skipAnswerLookup) {
-                    $answer = \Answer::model()->getAnswerFromCode($fieldmap[$key]['qid'], $value, $response->attributes['startlanguage']);
-                } else {
-                    $answer = null;
+                    // Array / matrix types store a numeric scale code as the response value.
+                    // Running getAnswerFromCode on them replaces e.g. "1" with a label like
+                    // "Hoher Beitrag", which then breaks numeric pct_map lookups in templates.
+                    $arrayTypes = ['F', 'H', 'E', 'C', 'A', 'B', ':', ';'];
+                    $isArrayType = in_array($fmType, $arrayTypes, true);
+
+                    // Secondary guard: if the type is unknown but the value is purely numeric,
+                    // treat it as a scale code and skip the label lookup.
+                    $isNumericValue = ($value !== null && $value !== '' && ctype_digit((string)$value));
+
+                    if (!$isArrayType && !$isNumericValue) {
+                        $answer = \Answer::model()->getAnswerFromCode(
+                            $fieldmap[$key]['qid'],
+                            $value,
+                            $response->attributes['startlanguage']
+                        );
+                    }
                 }
 
                 if ($answer !== null) {
